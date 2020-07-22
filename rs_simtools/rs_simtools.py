@@ -3,9 +3,7 @@ from simtk import openmm as mm
 from simtk.openmm import unit
 import mdtraj
 
-import numpy as np
-
-import parmed as pmd
+#import parmed as pmd
 
 class MDSimulation():
     def __init__(self, parmed_structure, coordinates, 
@@ -118,10 +116,10 @@ class MDSimulation():
         if not implicit_solvent_model in ['HTC', 'OBC1', 'OBC2', 'GBn','GBn2']:
             raise ValueError('Unknown implict solvent model {}'.format(implicit_solvent_model))
             
-        implict_model_object = eval("app.%s" % implicit_solvent_model)
-        nonbonded_method_object = eval("app.%s" % self.nonbonded_method)
-        implicit_force = parmed_structure.omm_gbsa_force(implicit_model_object,temperature=self.temperature * unit.kelvin,nonbondedMethod=nonbonded_method_object)
-        self.custom_forces['implicit_solvent']=self.system.addForce(implicit_solvent_force)
+        implicit_model_object = eval("app.%s" % implicit_solvent_model)
+        nonbonded_method_object = eval("app.%s" % nonbonded_method)
+        implicit_force = self.parmed_structure.omm_gbsa_force(implicit_model_object,temperature=self.temperature * unit.kelvin,nonbondedMethod=nonbonded_method_object)
+        self.custom_forces['implicit_solvent']=self.system.addForce(implicit_force)
         
         
     def freeze_atom_selection(self,atoms_to_freeze):
@@ -159,7 +157,7 @@ class MDSimulation():
             print('did not set any constraints')
             constraints_object=None
 
-        self.system = parmed_structure.createSystem(nonbondedMethod=app.PME,
+        self.system = self.parmed_structure.createSystem(nonbondedMethod=app.PME,
                                                  nonbondedCutoff=self.nonbonded_cutoff * unit.angstroms,
                                                  constraints=constraints_object,
                                                  hydrogenMass=4.0 * unit.amu if self.hmr else None)
@@ -209,7 +207,7 @@ class MDSimulation():
 
         if self.velocities is not None:
             print('found velocities, restarting from previous simulation')
-            self.simulation.context.setVelocities(velocities)
+            self.simulation.context.setVelocities(self.velocities)
         else:
             print('assigning random velocity distribution with temperature {}'.format(self.temperature))
             self.simulation.context.setVelocitiesToTemperature(self.temperature * unit.kelvin)
@@ -242,5 +240,5 @@ class MDSimulation():
         if not isinstance(time,unit.Quantity):
             raise ValueError ('sim time must have units')
             
-        nsteps = time/self.step_length
+        nsteps = int(round(time/self.step_length))
         self.simulation.step(nsteps)    
