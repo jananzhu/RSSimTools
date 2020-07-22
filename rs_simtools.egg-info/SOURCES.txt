@@ -1,0 +1,8 @@
+README.md
+setup.py
+rs_simtools/__init__.py
+rs_simtools/rs_simtools.py
+rs_simtools.egg-info/PKG-INFO
+rs_simtools.egg-info/SOURCES.txt
+rs_simtools.egg-info/dependency_links.txt
+rs_simtools.egg-info/top_level.txt
