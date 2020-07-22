@@ -7,14 +7,14 @@ import mdtraj
 
 class MDSimulation():
     def __init__(self, parmed_structure, coordinates, 
-                 velocities=None, box_vectors=None,
-                 temperature=300*unit.kelvin, pressure=1*unit.atmosphere, membrane=False,
-                 integrator='Langevin', platform=None, Nonbonded_method='PME', nonbonded_cutoff=0, 
-                 atoms_to_freeze=None, atoms_to_restrain=None,
-                 restraint_weight=None, constraints='HBonds',
+                 velocities = None, box_vectors = None,
+                 temperature = 300 * unit.kelvin, pressure = 1 * unit.atmosphere, membrane = False,
+                 integrator = 'Langevin', platform = None, nonbonded_method = 'PME', nonbonded_cutoff = 1 * unit.nanometer,
+                 atoms_to_freeze = None, atoms_to_restrain = None,
+                 restraint_weight = None, constraints = 'HBonds',
                  log_file = "sim.log",
-                 implicit_solvent_model = None, hmr=True,
-                 state_report_interval=None, progress_report_interval=None, traj_report_interval=None,
+                 implicit_solvent_model = None, hmr = True,
+                 state_report_interval = None, progress_report_interval = None, traj_report_interval = None,
                  traj_fn = 'trajectory.h5'
                  ):
 
@@ -36,15 +36,16 @@ class MDSimulation():
         self.platform  = platform
         self.temperature = temperature
         self.integrator = integrator
-        self.log_file= log_file
+        self.log_file = log_file
         self.atoms_to_restrain = atoms_to_restrain
         self.restraint_weight = restraint_weight
         self.implicit_solvent_model = implicit_solvent_model
         self.hmr = hmr
         self.constraints = constraints
         self.nonbonded_cutoff = nonbonded_cutoff
-        self.membrane=membrane
-        self.pressure=pressure
+        self.nonbonded_method = nonbonded_method
+        self.membrane = membrane
+        self.pressure = pressure
         self.state_report_interval = state_report_interval
         self.progress_report_interval = progress_report_interval
         self.traj_report_interval = traj_report_interval
@@ -52,7 +53,7 @@ class MDSimulation():
         self.traj_fn = traj_fn
         self.custom_forces = {}
         
-        #if box vectors are explicitly specified, attempt to get them from parmed
+        #if box vectors aren't explicitly specified, attempt to get them from parmed
         if box_vectors == None:
             self.box_vectors = parmed_structure.box_vectors
      
@@ -70,7 +71,7 @@ class MDSimulation():
         if self.velocities != None and len(self.velocities) != len(self.positions):
             raise ValueError('Number of velocities does not match number of coordinates')
         
-        #build sim
+        #build sim and add reporters
         self._build_sim()
         self._add_reporters()
 
@@ -157,7 +158,7 @@ class MDSimulation():
             print('did not set any constraints')
             constraints_object=None
 
-        self.system = self.parmed_structure.createSystem(nonbondedMethod=app.PME,
+        self.system = self.parmed_structure.createSystem(nonbondedMethod=self.nonbonded_method,
                                                  nonbondedCutoff=self.nonbonded_cutoff * unit.angstroms,
                                                  constraints=constraints_object,
                                                  hydrogenMass=4.0 * unit.amu if self.hmr else None)
@@ -241,4 +242,25 @@ class MDSimulation():
             raise ValueError ('sim time must have units')
             
         nsteps = int(round(time/self.step_length))
-        self.simulation.step(nsteps)    
+        self.simulation.step(nsteps)
+
+
+class Minimizer(MDSimulation):
+
+    def run(self, max_steps=None):
+
+        state = self.simulation.context.getState(getPositions=True, getEnergy=True)
+        starting_energy = state.getPotentialEnergy()
+
+        print('minimizing system with beginning energy: {}'.format(starting_energy))
+
+        if max_steps is not None:
+            self.simulation.minimizeEnergy()
+        else:
+            self.simulation.minimizeEnergy(maxIterations=max_steps)
+
+        state = self.simulation.context.getState(getPositions=True, getEnergy=True)
+        final_energy = state.getPotentialEnergy()
+
+        print('successfully minimized the system to final energy {}'.format(final_energy))
+        self.coordinates = state.getPositions()
