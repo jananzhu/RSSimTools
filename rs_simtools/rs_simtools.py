@@ -3,7 +3,106 @@ from simtk import openmm as mm
 from simtk.openmm import unit
 import mdtraj
 
-#import parmed as pmd
+aa_residues = "ALA " \
+                  "CYS " \
+                  "ASP " \
+                  "GLU " \
+                  "PHE " \
+                  "GLY " \
+                  "HIS " \
+                  "ILE " \
+                  "LYS " \
+                  "LEU " \
+                  "MET " \
+                  "ASN " \
+                  "PRO " \
+                  "GLN " \
+                  "ARG " \
+                  "SER " \
+                  "THR " \
+                  "VAL " \
+                  "TRP T" \
+                  "YR".split()
+
+water_residues = "HOH TIP3 TIP3P SPCE TIP4PEW WAT OH2 TIP".split()
+
+lipid_residues = ['AR', 'CHL', 'DHA', 'LA', 'MY', 'OL', 'PA', 'PC', 'PE', 'PGR', 'PH-', 'PS', 'SA', 'SM', 'ST']
+
+
+def select_atoms(parmed_structure, selection, ligand_resname=None):
+    if ligand_resname:
+        lig_residues = ['LIG', ligand_resname]
+    else:
+        lig_residues = ['LIG']
+
+    protein_chains = [i for i in parmed_structure.topology.chains() if next(i.residues()).name in aa_residues]
+    water_chains = [i for i in parmed_structure.topology.chains() if next(i.residues()).name in water_residues]
+    ligand_chains = [i for i in parmed_structure.topology.chains() if next(i.residues()).name in lig_residues]
+    lipid_chains = [i for i in parmed_structure.topology.chains() if next(i.residues()).name in lipid_residues]
+
+    final_list = []
+
+    if selection[:5] == 'resid':
+        resid_list = selection[5:].split()
+        chain_selection = resid_list[0]
+        resid_list = resid_list[1:]
+        #TODO check the order of chains in multichain proteins
+        #TODO Currently assuming alphabet designation matches parmed order
+        for k,chain in enumerate(protein_chains):
+            if ord(chain_selection.lower()-96) == k+1:
+                residues = [i for i in chain.residues()]
+                selected_residues = [i for i in residues if i.index in resid_list]
+
+                if len(selected_residues) == 0:
+                    raise ValueError('Could not find one of the residues {} on protein chain.'.format(resid_list))
+
+                for i in selected_residues:
+                    for k in i.atoms():
+                        final_list.append(k.index)
+    else:
+        selection_keywords = selection.split()
+        for keyword in selection_keywords:
+
+            if keyword not in ['ligand', 'protein', 'lipids', 'water', 'not']:
+                raise ValueError(
+                    'Selection could syntax could not be parsed. Options are resid chain int1 int2 int3... ; not; alpha_carbon; protein; ligand; excipients; lipids; water. If seelcting resid cannot use any other keywords')
+
+            if keyword == 'protein':
+                # loop across the chains and aggregate all the protein atoms
+                for chain in protein_chains:
+                    atoms = [i for i in chain.atoms()]
+                    atom_indeces = [i.index for i in atoms]
+                    for i in atom_indeces:
+                        final_list.append(i)
+
+            if keyword == 'water':
+                for chain in water_chains:
+                    atoms = [i for i in chain.atoms()]
+                    atom_indeces = [i.index for i in atoms]
+                    for i in atom_indeces:
+                        final_list.append(i)
+
+            if keyword == 'ligand':
+                for chain in ligand_chains:
+                    atoms = [i for i in chain.atoms()]
+                    atom_indeces = [i.index for i in atoms]
+                    for i in atom_indeces:
+                        final_list.append(i)
+
+            if keyword == 'lipid':
+                for chain in lipid_chains:
+                    atoms = [i for i in chain.atoms()]
+                    atom_indeces = [i.index for i in atoms]
+                    for i in atom_indeces:
+                        final_list.append(i)
+
+            if keyword == 'not':
+                all_atom_set = set([i for i in parmed_structure.topology.atoms()])
+                inverted_set = all_atom_set - set(final_list)
+                final_list = inverted_set
+
+    return final_list
+
 
 class MDSimulation():
     def __init__(self, parmed_structure, coordinates, 
@@ -264,3 +363,7 @@ class Minimizer(MDSimulation):
 
         print('successfully minimized the system to final energy {}'.format(final_energy))
         self.coordinates = state.getPositions()
+#
+# class MetadynamicsSimulation(MDSimulation):
+#     def __init__(self):
+        # def super().__init__(CV1=None, CV2=None, CV3 = None)
